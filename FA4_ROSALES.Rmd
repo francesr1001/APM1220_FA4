@@ -1,0 +1,458 @@
+---
+title: "FA4_ROSALES-TIME_SERIES"
+author: "Frances Aneth Rosales"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true        # Enable Table of Contents for PDF
+  html_document:
+    code_folding: hide
+    toc: true        # Enable Table of Contents for HTML
+---
+
+```{r setup , include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(forecast)
+library(tseries)
+library(ggplot2)
+library(zoo)
+library(lubridate)
+library(flextable)
+library(readr)
+library(car)
+
+```
+
+\section{READING THE DATA}
+<class style="font-size: 15px;">
+Import </class>
+```{r 1st, include=FALSE  }
+data <- read_csv("C:/Users/asus/Documents/ALL FEU FILES/FEU FOLDER 7/APPLIED MULTIVARIATE/FA4/Auto Pollution Filter Noise.csv")
+
+```
+
+```{r show1st  }
+library(knitr)
+
+kable(head(data), format = "markdown")
+
+```
+SET THE DATA TO A NEW DATA TYPE
+```{r show2NDS, include= FALSE}
+
+data$Size <- factor(data$Size, levels = c(1, 2, 3), labels = c("Small", "Medium", "Large"))
+data$Type <- factor(data$Type, levels = c(1, 2), labels = c("Standard", "Octel"))
+data$Side <- factor(data$Side, levels = c(1, 2), labels = c("Right", "Left"))
+
+kable(head(data), format = "markdown")
+model <- aov(Noise ~ Size * Type * Side, data = data)
+```
+
+
+```{r show2NDSshow  }
+
+kable(head(data), format = "markdown")
+
+```
+
+\newpage
+\section{6 ASSUMPTION OF Three-Way ANOVA}
+
+\textbf{1. Assumption Check for Three-Way ANOVA:}
+In order to analyze the three-way ANOVA, we need to check the \textbf{six assumptions}:
+
+\begin{enumerate}
+    \item Normality
+    \item Homogeneity of Variance
+    \item Independence of Observations
+    \item Linearity
+    \item No Multicollinearity
+    \item Sphericity
+\end{enumerate}
+
+
+\subsection{1. Normality}
+
+```{r Normality, include=FALSE}
+library(knitr)
+shapiro_test <- shapiro.test(residuals(model))
+print(shapiro_test)
+
+shapiro_df <- data.frame(
+  Statistic = shapiro_test$statistic,
+  P_Value = shapiro_test$p.value
+)
+
+kable(shapiro_df, format = "markdown", col.names = c("W Statistic", "P-Value"))
+
+
+```
+
+```{r Normalityshow  }
+kable(shapiro_df, format = "markdown", col.names = c("W Statistic", "P-Value"))
+
+
+```
+\subsubsection{Findings:} 
+The residuals' normality was evaluated using the Shapiro-Wilk test. A \textbf{p-value of 0.03515} and a \textbf{W statistic of 0.93483} were obtained from the outcome. The null hypothesis of normality will be \textbf{rejected} given that the p-value is smaller than \textbf{0.05}, indicating that the residuals might not follow a normal distribution.
+
+
+
+```{r plot1  }
+qqnorm(residuals(model))
+qqline(residuals(model), col = "red")
+
+```
+\subsubsection{Findings:}
+The Q-Q plot indicates \textbf{approaching normality} since the majority of the residuals, which are shown by little circles, \textbf{match nicely with the red line}. Some residuals, meanwhile, seem to \textbf{line horizontally}, suggesting that there may be some \textbf{outliers} or \textbf{deviations from normality} in particular regions.
+
+\newpage
+
+
+\subsection{2. Homogeneity of Variances}
+
+```{r Homogeneity, include=FALSE}
+homoge_test <- leveneTest(Noise ~ Size * Type * Side, data = data)
+homoge_df <- data.frame(
+  Df_Group = homoge_test$`Df`[1],
+  Df_Residuals = homoge_test$`Df`[2],
+  F_Statistic = homoge_test$`F value`,
+  P_Value = homoge_test$`Pr(>F)`
+)
+
+```
+
+```{r Homogeneityshow  }
+homoge_test <- leveneTest(Noise ~ Size * Type * Side, data = data)
+kable(homoge_df, format = "markdown", col.names = c("Df Group", "Df Residuals", "F Statistic", "P-Value"))
+
+```
+
+\subsubsection{Findings:}
+Analyzing the result, we are unable to reject the null hypothesis since the p-value is substantially higher than 0.05, suggesting that the **variances are similar** and **do not differ significantly** amongst the groups.
+
+\subsection{3. Independence of Observations}
+
+Here, we will perform the three-way model assumption following **the 4 steps of three-way anova**.
+
+
+```{r Independence1, include=FALSE}
+anova_summary <- summary(model)
+
+p_values <- data.frame(
+  Effect = c("Size:Type", "Size:Side", "Type:Side", "Size:Type:Side", 
+             "Size (Main Effect)", "Type (Main Effect)", "Side (Main Effect)"),
+  P_Value = c(
+    anova_summary[[1]]$`Pr(>F)`[4],  # Size:Type
+    anova_summary[[1]]$`Pr(>F)`[5],  # Size:Side
+    anova_summary[[1]]$`Pr(>F)`[6],  # Type:Side
+    anova_summary[[1]]$`Pr(>F)`[7],  # Size:Type:Side
+    anova_summary[[1]]$`Pr(>F)`[1],  # Size (Main Effect)
+    anova_summary[[1]]$`Pr(>F)`[2],  # Type (Main Effect)
+    anova_summary[[1]]$`Pr(>F)`[3]   # Side (Main Effect)
+  ),
+  Significance = c(
+    "Significant", "Significant", "", "Significant",
+    "Significant", "", ""
+  )
+)
+```
+
+
+```{r Independence1show  }
+library(knitr)
+kable(p_values, format = "markdown", col.names = c("Effect", "P-Value", "Significance"))
+
+
+```
+\subsubsection{Findings:}
+According to the results, the \textbf{main effects of vehicle size and fuel type are significant}, indicating that these factors \textbf{independently affect noise levels}. This suggests that the data on vehicle size and fuel type obtained independently, which supports the \textbf{assumption of independence}.
+
+\textbf{No Significant Effect of the Type and Side} \\
+The car's side and fuel type does not have any \textbf{significant independent impact on loudness levels}. This additionally implies that each variable's (size, fuel type, and side) results were \textbf{unaffected by the remaining factors}, confirming their \textbf{independence of findings}.
+
+\newpage
+
+
+\subsection{ THE 12 BOXPLOT}
+
+```{r boxplot12  }
+ggplot(data, aes(x = interaction(Size, Type, Side), y = Noise, fill = interaction(Size, Type, Side))) +
+  geom_boxplot() +
+  labs(x = "Vehicle Size, Type, and Side", y = "Noise Level (decibels)", title = "Noise Levels by Vehicle Size, Type, and Side") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+\subsubsection{Findings:}
+The small boxplots for \textbf{Small.Octel.Right}, \textbf{Large.Octel.Right}, \textbf{Small.Standard.Left}, and \textbf{Small.Octel.Left} show that the noise levels for these vehicle groups have \textbf{low variability}.
+
+Additionally, when compared to the \textbf{normal silencer}, the \textbf{Octel filter} (e.g., \textbf{Small.Octel.Right}, \textbf{Medium.Octel.Right}) typically displays \textbf{lower noise levels} over a range of sizes and sides, suggesting that the Octel filter may be more effective at \textbf{reducing noise}.
+
+Furthermore, the median noise levels of \textbf{Large Vehicles} (such as \textbf{Large.Standard.Right} and \textbf{Large.Octel.Left}) are \textbf{greater} than those of \textbf{Medium} and \textbf{Small Vehicles}. The box corresponding to \textbf{Large.Octel.Left} appears to have the \textbf{highest median}, for example.
+
+There seems to be also a \textbf{mixed effect} from the side (left vs. right). Certain combinations exhibit \textbf{varying noise levels} based on the direction of measurement (left or right).
+\newpage
+
+\subsection{4. Linearity}
+
+```{r show3RDsss, warning=FALSE}
+
+par(mfrow = c(2, 2))
+plot(data$Size, data$Noise, main = "Size vs. Noise", xlab = "Size", ylab = "Noise")
+abline(lm(Noise ~ Size, data = data), col = "red")
+plot(data$Type, data$Noise, main = "Type vs. Noise", xlab = "Type", ylab = "Noise")
+abline(lm(Noise ~ Type, data = data), col = "red")
+plot(data$Side, data$Noise, main = "Side vs. Noise", xlab = "Side", ylab = "Noise")
+abline(lm(Noise ~ Side, data = data), col = "red")
+par(mfrow = c(1, 1))
+
+```
+\subsubsection{Findings:}
+\textbf{Size vs. Noise:} This plot was able to show the linearity in the relationship of \textit{Small} and \textit{Medium} Size vs. Noise; as such, there's a proportional increase whenever Noise and Size increases. However, we must also take a look at the \textbf{outlier} of \textit{Large} size. While greater sizes often result in more noise, there are certain situations (like the outlier) in which larger sizes result in \textbf{less noise}. Thus, this relationship is \textbf{not strictly linear}.
+
+\textbf{Type vs. Noise:} Similar noise levels are observed when comparing the \textit{"Standard"} and \textit{"Octel"} types, indicating that object type has \textbf{little impact} on noise output.
+
+\textbf{Side vs. Noise:} It appears that there is \textbf{little variation} in noise levels between the \textit{"Right"} and \textit{"Left"} sides, suggesting that side position has \textbf{little effect} on noise levels.
+
+\newpage
+
+
+
+\subsection{5. Sphericity}
+
+```{r Sphericity, warning=FALSE, include=FALSE}
+
+library(car)
+library(nlme)
+library(reshape2)
+
+data <- data.frame(
+  Subject = rep(1:10, each = 3),   # 10 subjects
+  Condition = rep(c("A", "B", "C"), times = 10), # 3 conditions
+  Score = c(rnorm(10, mean = 20, sd = 5), 
+            rnorm(10, mean = 22, sd = 5), 
+            rnorm(10, mean = 24, sd = 5))
+)
+
+# Perform the repeated measures ANOVA using the aov() function
+anova_result <- aov(Score ~ Condition + Error(Subject/Condition), data = data)
+long_data <- dcast(data, Subject ~ Condition, value.var = "Score")
+
+mauchly_test <- mauchly.test(lm(cbind(A, B, C) ~ 1, data = long_data))
+print(mauchly_test)
+
+```
+
+
+
+```{r Sphericityshow, warning=FALSE}
+print(mauchly_test)
+
+```
+
+\subsubsection{Findings:}
+\textbf{Simultaneous performance of Mauchly's test of sphericity} shows that the \textbf{p-value} is constantly greater than 0.05, which implies that the \textbf{variances of the differences are similar}, indicating that the \textbf{sphericity assumption is not violated}. Additionally, similar to the \textbf{p-value}, the \textbf{W statistic} is close to 1, thus we can also conclude that \textbf{sphericity is met}.
+
+\newpage
+
+\subsection{6. No Multicollinearity}
+
+```{r Multicollinearityss, warning=FALSE, include=FALSE}
+num_data <- read_csv("C:/Users/asus/Documents/ALL FEU FILES/FEU FOLDER 7/APPLIED MULTIVARIATE/FA4/Auto Pollution Filter Noise.csv")
+
+# Convert Size, Type, and Side to factors
+num_data$Size <- as.factor(num_data$Size)
+num_data$Type <- as.factor(num_data$Type)
+num_data$Side <- as.factor(num_data$Side)
+
+
+```
+
+
+```{r Multicollinearity, warning=FALSE}
+
+lm_model <- lm(Noise ~ Size + Type + Side, data = num_data)
+vif_values <- vif(lm_model)
+print(vif_values)
+```
+\subsubsection{Findings:}
+\textbf{Size, Type, and Side all have Generalized Variance Inflation Factor (GVIF) values of 1}, demonstrating the \textbf{absence of multicollinearity} among these variables. The fact that both the \textbf{GVIF values} and their accompanying adjustments \((\text{GVIF}^{(1/(2 \cdot \text{Df}))} = 1)\) indicates that the independent variables are not increasing the \textbf{variance of the regression model's estimated coefficients}.
+
+
+\newpage
+
+\section{THE THREE-WAY ANOVA MODEL}
+```{r show3Rnezk, warning=FALSE, include=FALSE}
+data <- read_csv("C:/Users/asus/Documents/ALL FEU FILES/FEU FOLDER 7/APPLIED MULTIVARIATE/FA4/Auto Pollution Filter Noise.csv")
+
+anova_model <- aov(Noise ~ Size * Type * Side, data = data)
+
+summary(anova_model)
+```
+
+
+```{r show3Rnez, warning=FALSE}
+summary(anova_model)
+```
+\section{2. Is there a significant interaction between vehicle size, type and side on noise levels?}
+
+
+```{r 3waysummary  }
+summary(model)[[1]]["Size:Type:Side", "Pr(>F)"]
+
+```
+\subsubsection{Findings:}
+Indeed, there is a **strong three-way relationship between noise levels and vehicle type, size, and side**. The three-way interaction (Size:Type:Side) has a statistically significant interaction, as indicated by the p-value of 0.000579.
+
+\newpage
+\section{THE TWO-WAY ANOVA MODEL}
+
+```{r show2ND  }
+
+interaction_model <- aov(Noise ~ Size * Type + Size * Side + Type * Side, data = data)
+
+summary(interaction_model)
+
+
+```
+
+\section{3.Provide a two-way interaction effect between the vehicle's size, type, and side on noise levels.}
+```{r 2waysummary, include=FALSE}
+newformat <- data.frame(
+  Effect = c("Size:Type", "Size:Side", "Type:Side"),
+  P_Value = format(c(
+    anova_summary[[1]]$`Pr(>F)`[4],  # Size:Type
+    anova_summary[[1]]$`Pr(>F)`[5],  # Size:Side
+    anova_summary[[1]]$`Pr(>F)`[6]   # Type:Side
+  ), digits = 10),  # Set the precision to 10 decimal places
+  Significance = c(
+    "Significant", "Significant", ""
+  )
+)
+
+```
+
+```{r 2waysummaryshow  }
+
+library(knitr)
+kable(newformat, format = "markdown", col.names = c("Effect", "P-Value", "Significance"))
+
+```
+\subsubsection{Findings:}
+
+\textbf{Size:Type} = 6.047755206e-07 
+This shows a statistically significant result, indicating that the effect of vehicle size on noise levels depends on the fuel type.
+
+\textbf{Size:Side} = 8.729503709e-09 
+This also shows a significant result, suggesting that the effect of vehicle size on noise levels varies depending on which side of the vehicle is measured.
+
+\textbf{Type:Side} = 2.860667260e-01
+This shows a non-significant result, indicating that the effect of fuel type does not depend on the side of the vehicle.
+
+\newpage
+
+
+
+
+\section{4.Are there significant main effects of the vehicle size (Size), type of vehicle (Type), and side of the car (Side) on noise levels?}
+
+```{r maineffetc, include=FALSE  }
+# Fit the ANOVA model with interactions
+interaction_model <- aov(Noise ~ Size * Type * Side, data = data)
+
+# Get the summary of the ANOVA
+anova_summary <- summary(interaction_model)
+
+# Extract p-values for the main effects
+p_size <- anova_summary[[1]]$`Pr(>F)`[1]  # P-value for Size
+p_type <- anova_summary[[1]]$`Pr(>F)`[2]  # P-value for Type
+p_side <- anova_summary[[1]]$`Pr(>F)`[3]  # P-value for Side
+
+# Print the p-values
+print(paste("P-value for Size:", p_size))
+print(paste("P-value for Type:", p_type))
+print(paste("P-value for Side:", p_side))
+
+kblrthe <- data.frame(
+  Effect = c("Size", "Type", "Side"),
+  P_Value = c(p_size, p_type, p_side)
+)
+
+# Display the kblr DataFrame
+```
+
+
+```{r maineffetcSHOW  }
+print(kblrthe)
+
+```
+\subsubsection{Findings:}
+
+Aside Fuel Type and Vehicle Side, **only the	Vehicle Size shows a significant in Main Effects** implicates that larger vehicles produce higher noise levels compared to medium or small vehicles. 
+
+
+
+\section{5.Which factor or combination of factors has the greatest impact on noise levels?}
+\subsubsection{Findings:}
+The findings show that the **only factor that significantly influences noise levels is the size of the vehicle**. The substantial interactions demonstrate that the **impacts of vehicle size differ based on the kind of fuel and the side of the vehicle**. In comparison to the other parameters, vehicle size accounts for a greater percentage of the variance in noise levels due to its exceptionally low p-value.
+\newpage
+
+
+
+\section{6.After finding a significant main effect for vehicle size, which specific teaching size differ in their effect on noise levels?}
+
+\subsubsection{POST-HOC}
+
+
+The Tukey multiple comparisons of means reveal \textbf{significant variations} in factors like \textbf{size} and \textbf{type}, with major variations observed between \textbf{medium and small}, \textbf{large and medium}, and \textbf{large and small}, indicating a significant influence on the analysis's \textbf{noise levels}.
+
+The \textbf{Type factor} significantly influences noise outcomes, particularly between \textbf{Octel and Standard}, while the \textbf{Side component}, with a strong p-value of \textbf{0.8291}, does not significantly impact noise levels, suggesting that side does not contribute.
+
+Interactions between size and type also show various significant differences, reinforcing the conclusion that the main factors have a \textbf{substantial effect} on the response variable while the Side factor remains \textbf{negligible} in terms of its influence on the mean differences in noise levels.
+
+In summary, these results highlight that with the Side factor having minimal effect on the average variations in noise levels.
+
+\newpage
+
+\section{ANALYSIS AND CONCLUSION}
+
+The findings indicate that the residuals' normality was assessed using the Shapiro-Wilk test, resulting in a p-value of 0.03515 and a W statistic of 0.93483, leading to the rejection of the null hypothesis of normality. The Q-Q plot suggests approaching normality, as most residuals align with the red line, although some residuals appear to show horizontal alignment, indicating potential outliers or deviations from normality.
+
+Analysis of variances showed that vehicle size and fuel type significantly influence noise levels, while the side factor had no independent impact. Additionally, the findings demonstrate that noise levels for vehicle groups such as Small.Octel.Right and Large.Octel.Left exhibit low variability, with the Octel filter generally performing better at reducing noise compared to standard filters across various sizes and sides.
+
+The analysis also reveals that larger vehicles produce higher noise levels compared to smaller and medium vehicles, with significant interactions between vehicle size, fuel type, and side. The Tukey multiple comparisons highlight substantial variations, particularly between size categories, while the side factor does not significantly affect noise levels, confirming that the primary influence on noise levels stems from vehicle size.
+
+
+\newpage
+\subsection{POST-HOC RESULTS}
+
+```{r showPOSTHOC  }
+data$Size <- as.factor(data$Size)
+data$Type <- as.factor(data$Type)
+data$Side <- as.factor(data$Side)
+
+anova_model <- aov(Noise ~ Size * Type * Side, data = data)
+
+tukey_results <- TukeyHSD(anova_model)
+
+print(tukey_results)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
